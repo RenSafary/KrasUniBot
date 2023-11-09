@@ -1,7 +1,6 @@
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.utils.callback_data import CallbackData
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ContentType, InputFile
 from peewee import *
@@ -43,7 +42,7 @@ class ProfileStatesGroup(StatesGroup):
     complaint = State()
 
 db.connect()
-@dp.message_handler(commands=['myprofile'])
+@dp.message_handler(commands=['myprofile', 'start'])
 async def profile(message: types.Message):
     global user_id
 
@@ -82,9 +81,9 @@ async def send_notification(user_id):
         if user_id is not None:
             liked_user = Liked_Users.select().where((Liked_Users.liked_id == user_id) & (Liked_Users.watched == False)).exists()
             if liked_user:
-                await bot.send_message(chat_id=user_id, text="У вас есть новое уведомление! /notifications")
+                await bot.send_message(chat_id=user_id, text="Вами кто-то заинтересовался! <b>/notifications</b>", parse_mode='HTML')
                 Liked_Users.update(watched=True).where(Liked_Users.liked_id == user_id).execute()
-        await asyncio.sleep(1)
+        await asyncio.sleep(5)
 
 async def delete_watched_and_liked_forms():
     while True:
@@ -97,14 +96,16 @@ async def delete_watched_and_liked_forms():
             Liked_Users.delete().where(Liked_Users.date == d).execute()
         if w_user:    
             Watched_Users.delete().where(Watched_Users.date == d).execute()
-        await asyncio.sleep(1)
+        await asyncio.sleep(5)
 
 
 k = 1
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == 'choice', state=ProfileStatesGroup.choice)
 async def choice(message: types.Message, state: FSMContext):
-    if message.text == "/myprofile":
-        await profile(message)
+    if message.text == "/myprofile": await profile(message)
+
+    if message.text == "/notifications": await notifications(message)
+
     else:
         global k
 
@@ -140,8 +141,6 @@ async def choice(message: types.Message, state: FSMContext):
 
                 user_step[message.from_user.id] = "search"
                 await ProfileStatesGroup.choice.set()
-            if data['choice'] == "/notifications":
-                await notifications(message)
 
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "name", state=ProfileStatesGroup.name)
@@ -473,9 +472,9 @@ async def fav_uni_(message: types.Message):
                 faculties = Faculty.select().where(Faculty.university_id == uni.id)
                 faculties_arr = [i.faculty for i in faculties]
                 fac = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+                fac.add(KeyboardButton(text="Пропустить"))
                 for i in faculties_arr:
                     fac.add(KeyboardButton(text=i))
-                fac.add(KeyboardButton(text="Пропустить"))
                 await message.answer(text="Теперь выберите факультет:", reply_markup=fac)
                 user_step[user_id] = "fav_faculty"
                 break
@@ -509,9 +508,9 @@ async def fav_faculty_(message: types.Message):
             directions = Direction.select().where(Direction.faculty_id == fac.id) 
             directions_arr = [i.direction for i in directions]
             dir = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            dir.add(KeyboardButton(text="Пропустить"))
             for i in directions_arr:
-                dir.add(types.KeyboardButton(text=i))
-            dir.add(KeyboardButton(text="Пропустить"))    
+                dir.add(types.KeyboardButton(text=i)) 
             await message.answer(text="Теперь выберите направление:", reply_markup=dir)
             user_step[user_id] = "fav_direction"
         else:
@@ -545,9 +544,9 @@ async def choose_direction(message: types.Message):
             courses = Course.select().where(Course.direction_id == dir.id)
             courses_arr = [i.course for i in courses]
             cour = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+            cour.add(KeyboardButton(text="Пропустить"))
             for i in courses_arr:
                 cour.add(types.KeyboardButton(text=i))
-            cour.add(KeyboardButton(text="Пропустить"))
             user_step[user_id] = "fav_course"
             await message.answer(text="Выбери курс:", reply_markup=cour)
         else:
@@ -589,8 +588,8 @@ previous_step = None
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "search", state=ProfileStatesGroup.choice)
 async def search_form(message: types.Message, state: FSMContext):
     global last_user, step_form, previous_step
-    if message.text == "/myprofile":
-        await profile(message)
+    if message.text == "/myprofile": await profile(message)
+    if message.text == "/notifications": await notifications(message)    
     else:
         async with state.proxy() as data:
             data['choice'] = message.text
@@ -759,10 +758,8 @@ async def search_form(message: types.Message, state: FSMContext):
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "complaint", state=ProfileStatesGroup.choice)
 async def complaint(message: types.Message, state: FSMContext):
-    if message.text == "/myprofile":
-        await profile(message)
-    elif message.text == "/notifications":
-        await notifications(message)
+    if message.text == "/myprofile": await profile(message)
+    if message.text == "/notifications": await notifications(message)
     else:
         global last_user
         user_id = message.from_user.id
@@ -822,7 +819,7 @@ async def notifications(message: types.Message):
                 await ProfileStatesGroup.choice.set()
             else:
                 chat_id = message.from_user.id
-                user_profile_link = f'Приятного общения с <a href="tg://openmessage?user_id={user.id}">@{user.name_tg}</a>!'
+                user_profile_link = f'Приятного общения с <a href="tg://openmessage?user_id={user.id}">{user.name_tg}</a>!'
                 await bot.send_message(chat_id, text=user_profile_link, parse_mode="HTML")
 
                 Liked_Users.delete().where((Liked_Users.user == user.id) & (Liked_Users.liked_id == message.from_user.id)).execute()
