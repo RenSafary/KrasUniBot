@@ -819,7 +819,7 @@ async def notifications(message: types.Message):
                 await ProfileStatesGroup.choice.set()
             else:
                 chat_id = message.from_user.id
-                user_profile_link = f'Приятного общения с <a href="tg://openmessage?user_id={user.id}">{user.name_tg}</a>!'
+                user_profile_link = f'Приятного общения с <a href="https://t.me/{user.name_tg}">@{user.name_tg}</a>!'
                 await bot.send_message(chat_id, text=user_profile_link, parse_mode="HTML")
 
                 Liked_Users.delete().where((Liked_Users.user == user.id) & (Liked_Users.liked_id == message.from_user.id)).execute()
