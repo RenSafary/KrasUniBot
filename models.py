@@ -74,7 +74,7 @@ class Complaint(BaseModel):
 
 
 if __name__ == "__main__":
-    db.create_tables([Liked_Users])
+    db.create_tables([Users])
     db.connect()
 
     universities = University.select()

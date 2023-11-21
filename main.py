@@ -2,7 +2,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
-from aiogram.types import ContentType, InputFile
+from aiogram.types import InputFile, ContentType
 from peewee import *
 import io
 import emoji
@@ -11,11 +11,24 @@ from datetime import *
 
 from keyboards import *
 from models import *
+from handlers.complaint import comp
+from handlers.registration import us_name, us_age, us_sex, us_inf, sk_uni, ch_uni, ch_fac, ch_dir, ch_cour, ch_us_sex
+
 
 TOKEN_API = "6677193949:AAEGvtUogiiZewOqdw8OxEIbI8hC4CqI3U8"
 
 bot = Bot(TOKEN_API)
 dp = Dispatcher(bot, storage=MemoryStorage())
+
+
+class ProfileStatesGroup(StatesGroup):
+    name = State()
+    sex = State()
+    age = State()
+    inf = State()
+    photo = State()
+    choice = State()
+    complaint = State()
 
 user_step = {}
 selected_university = ""
@@ -31,15 +44,6 @@ fav_selected_course = ""
 
 #___ ___ ___ ___ ___ ___ ___ 
 user_id = None
-
-class ProfileStatesGroup(StatesGroup):
-    name = State()
-    sex = State()
-    age = State()
-    inf = State()
-    photo = State()
-    choice = State()
-    complaint = State()
 
 db.connect()
 @dp.message_handler(commands=['myprofile', 'start'])
@@ -105,7 +109,6 @@ async def choice(message: types.Message, state: FSMContext):
     if message.text == "/myprofile": await profile(message)
 
     if message.text == "/notifications": await notifications(message)
-
     else:
         global k
 
@@ -147,19 +150,10 @@ async def choice(message: types.Message, state: FSMContext):
 async def user_name(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
-    elif message.text == "/notifications":
-        await notifications(message)
     else:
         async with state.proxy() as data:
             data['name'] = message.text
-
-            user = Users.delete().where(Users.id == message.from_user.id)
-            user.execute()
-
-            name = Users.create(id=int(message.from_user.id), name_tg=message.from_user.full_name, name=data['name'])
-            name.save()
-
-            await message.answer(text=f"Сколько тебе лет?")
+            await us_name(message)
             user_step[message.from_user.id] = "age"
             await ProfileStatesGroup.age.set()
 
@@ -168,56 +162,42 @@ async def user_name(message: types.Message, state: FSMContext):
 async def user_age(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
-    elif message.text == "/notifications":
-        await notifications(message)
     else:
         async with state.proxy() as data:
             data['age'] = message.text
-            user_age = data['age']
-            try:
-                if int(user_age) >= 16 & int(user_age) <= 26:
-                    Users.update(age=user_age).where(Users.id == int(message.from_user.id)).execute()
 
-                    user_step[message.from_user.id] = "sex"
-                    await message.answer(text=f'Твой пол:', reply_markup=sex)
-                    await ProfileStatesGroup.sex.set()
+            try:
+                if (26 >= int(message.text) >= 16):
+                        await us_age(message)
+
+                        user_step[message.from_user.id] = "sex"
+                        await ProfileStatesGroup.sex.set()
+                else:
+                    await message.answer(text='Извините, но вы не должны быть младше 16 и старше 26 лет.\nПопробуйте ещё раз:')
+                    await ProfileStatesGroup.age.set()
             except:
-                await message.answer(text='Возраст был введён неверно..\nПопробуйте ещё раз:')
-                user_step[message.from_user.id] = "age"
-                await ProfileStatesGroup.age.set()
+                await message.answer(text='Возраст введён неверно..\nПопробуйте ещё раз:')
 
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "sex", state=ProfileStatesGroup.sex)
 async def user_sex(message: types.Message, state: FSMContext):
+    global k
+ # что-то с глобальной переменной, k не принимает значение в функции u_s
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await notifications(message)
+        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
     else:
         async with state.proxy() as data:
             data['sex'] = message.text
-            user_sex = data['sex']
-            k = 0
-
-            if user_sex.lower() == 'м' or user_sex.lower() == 'm' or user_sex == emoji.emojize(":man:"):
-                Users.update(sex="М").where(Users.id == int(message.from_user.id)).execute()
-                k+=1
-
-            elif user_sex.lower() == 'ж' or user_sex == emoji.emojize(":woman:"):
-                Users.update(sex="Ж").where(Users.id == int(message.from_user.id)).execute()
-                k+=1
-
-            else:
-                await message.answer(text='Пол был введён неверетно..\nПопробуйте ещё раз:')
-                user_step[message.from_user.id] = "sex"
-                await ProfileStatesGroup.sex.set()
-                
-            if k == 1:
-                skip = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-                skip.add(KeyboardButton(text="Пропустить"))
-                await message.answer(text=f"Напиши что-нибудь о себе", reply_markup=skip)
+            i = 0
+            i = await us_sex(message, i)
+            if i == 0:
+                await ProfileStatesGroup.sex.set() 
+            if i == 1:
                 user_step[message.from_user.id] = "inf"
                 await ProfileStatesGroup.inf.set()
+            k = i
 
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "inf", state=ProfileStatesGroup.inf)
@@ -226,22 +206,18 @@ async def user_inf(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await notifications(message)
+        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
     else:
         async with state.proxy() as data:
             data['inf'] = message.text
-            user_inf = data['inf']
-            if user_inf != "Пропустить":
-                Users.update(information=user_inf).where(Users.id == int(message.from_user.id)).execute()
+            i = k
 
-            if k == 3:
-                await state.finish()
-                await message.answer(text="Вернуться к анкете..", reply_markup=my_profile)
+            k = await us_inf(message, i)
+            if k == 3: await state.finish()
             else:
-                await message.answer(text=f'{message.from_user.full_name}, осталось прикрепить твоё фото', reply_markup=types.ReplyKeyboardRemove())
                 user_step[message.from_user.id] = "photo"
                 await ProfileStatesGroup.photo.set()
-
+            
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "photo", state=ProfileStatesGroup.photo, content_types=ContentType.PHOTO)
 async def user_photo(message: types.Message, state: FSMContext):
@@ -249,7 +225,7 @@ async def user_photo(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await notifications(message)
+        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
     else:
         async with state.proxy() as data:
             if message.content_type == "photo":
@@ -272,149 +248,84 @@ async def user_photo(message: types.Message, state: FSMContext):
                     await message.answer(text=text)
                     await message.answer(text="Для начала выбери свой вуз:", reply_markup=university)
                     user_step[message.from_user.id] = "university"
-            
+
 
 @dp.message_handler(lambda message: message.text == "Пропустить")
 async def skip_university(message: types.Message):
     step = user_step[message.from_user.id]
-    if step == "fav_faculty":
-        Users.update(fav_faculty=None, fav_direction=None, fav_course=None).execute()
-        await message.answer(text='Анкета успешно заполнена.', reply_markup=types.ReplyKeyboardRemove())
-        await message.answer(text="Открыть анкету..", reply_markup=my_profile)
-    if step == "fav_direction":
-        Users.update(fav_direction=None, fav_course=None).execute()
-        await message.answer(text='Анкета успешно заполнена.', reply_markup=types.ReplyKeyboardRemove())
-        await message.answer(text="Открыть анкету..", reply_markup=my_profile)
-    if step == "fav_course":
-        Users.update(fav_direction=None, fav_course=None).execute()
-        await message.answer(text='Анкета успешно заполнена.', reply_markup=types.ReplyKeyboardRemove())
-        await message.answer(text="Открыть анкету..", reply_markup=my_profile)
+    await sk_uni(message, step)
 
 
-@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "university")
+@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "university" or user_step.get(message.from_user.id) == "fav_university")
 async def choose_university(message: types.Message):
     global selected_university
 
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await notifications(message)
+        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
     else:
-        user_id = message.from_user.id
-        selected_university = message.text
-        
-        universities = University.select().where(University.university == selected_university).exists()
+        sel_uni = None
+        step = user_step[message.from_user.id]
 
-        if universities:
-            uni = University.get(University.university == selected_university)
-            if selected_university.upper() == uni.university:
-                user_step[user_id] = "faculty"
-
-                Users.update(university=uni.id).where(Users.id == user_id).execute()
-
-                faculties = Faculty.select().where(Faculty.university_id == uni.id)
-                faculties_arr = [i.faculty for i in faculties]
-                fac = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-                for i in faculties_arr:
-                    fac.add(KeyboardButton(text=i))
-                await message.answer(text="Теперь выбери факультет:", reply_markup=fac)
-        else:
-            await message.answer(text=f'<b>{selected_university}</b> не найден, попробуйте еще раз:', parse_mode="HTML")
+        selected_university = await ch_uni(message, sel_uni, step)
+        if (selected_university != None) and (step == "university"): user_step[message.from_user.id] = "faculty"
+        if (fav_selected_faculty != None) and (step == "fav_university"): user_step[message.from_user.id] = "fav_faculty"
 
 
-@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "faculty")
+@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "faculty" or user_step.get(message.from_user.id) == "fav_faculty")
 async def choose_faculty(message: types.Message):
     global selected_university, selected_faculty
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await notifications(message)
+        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
     else:
-        user_id = message.from_user.id
-        selected_faculty = message.text
-        selected_faculty = selected_faculty.lower()
+        sel_uni = selected_university
+        sel_fac = selected_faculty
+        step = user_step[message.from_user.id]
 
-        universities = University.get(University.university == selected_university)
-        faculties = Faculty.select().where((Faculty.university_id == universities.id) 
-        & (Faculty.faculty == selected_faculty)).exists()
-
-        if faculties:
-            fac = Faculty.get((Faculty.university_id == universities.id) 
-            & (Faculty.faculty == selected_faculty))
-            user_step[user_id] = "direction"
-
-            Users.update(faculty=fac.id).where(Users.id == user_id).execute()
-
-            directions = Direction.select().where(Direction.faculty_id == fac.id) 
-            directions_arr = [i.direction for i in directions]
-            dir = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-            for i in directions_arr:
-                dir.add(types.KeyboardButton(text=i))
-            await message.answer(text="Теперь выбери направление:", reply_markup=dir)
-        else:
-            await message.answer(text=f'<b>{selected_faculty}</b> не найден, попробуйте еще раз:', parse_mode="HTML")
+        selected_faculty = await ch_fac(message, sel_uni, sel_fac, step)
+        if (selected_faculty != None) & (step == "faculty"): user_step[message.from_user.id] = "direction"
+        if (selected_faculty != None) & (step == "fav_faculty"): user_step[message.from_user.id] = "fav_direction"
 
 
-@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "direction")
+@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "direction" or user_step.get(message.from_user.id) == "fav_direction")
 async def choose_direction(message: types.Message):
     global selected_university, selected_faculty, selected_direction
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await notifications(message)
+        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
     else:
-        user_id = message.from_user.id
-        selected_direction = message.text
-        selected_direction = selected_direction.lower()
+        sel_uni = selected_university
+        sel_fac = selected_faculty
+        sel_dir = None
+        step = user_step[message.from_user.id]
 
-        universities = University.get(University.university == selected_university)
-        faculties = Faculty.get((Faculty.faculty == selected_faculty) & (Faculty.university_id == universities.id))
-        directions = Direction.select().where((Direction.direction == selected_direction) & (Direction.faculty_id == faculties.id)).exists()
-                
-        if directions:
-            dir = Direction.get((Direction.direction == selected_direction) & (Direction.faculty_id == faculties.id))
-            user_step[user_id] = "course"
-
-            Users.update(direction=dir.id).where(Users.id == user_id).execute()
-
-            courses = Course.select().where(Course.direction_id == dir.id)
-            courses_arr = [i.course for i in courses]
-            cour = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-            for i in courses_arr:
-                cour.add(types.KeyboardButton(text=i))
-            #cour.add(KeyboardButton(text="Пропустить"))
-            await message.answer(text="Теперь выберите курс:", reply_markup=cour)
-        else:
-            await message.answer(text=f'Направление <b>{selected_direction}</b> не найдено, попробуйте еще раз:', parse_mode="HTML")
+        selected_direction = await ch_dir(message, sel_uni, sel_fac, sel_dir, step)
+        if (selected_direction != None) and (step == "direction"): user_step[message.from_user.id] = "course"
+        if (selected_direction != None) and (step == "fav_direction"): user_step[message.from_user.id] = "fav_course"
 
 
-@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "course")
+@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "course" or user_step.get(message.from_user.id) == "fav_course")
 async def choose_course(message: types.Message, state: FSMContext):
     global selected_university, selected_faculty, selected_direction, selected_course
 
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await notifications(message)
+        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
     else:
-        user_id = message.from_user.id
-        selected_course = message.text
+        sel_uni = selected_university
+        sel_fac = selected_faculty
+        sel_dir = selected_direction
+        sel_cour = None
+        step = user_step[message.from_user.id]
 
-        universities = University.get(University.university == selected_university)
-        faculties = Faculty.get((Faculty.faculty == selected_faculty) & (Faculty.university_id == universities.id))
-        directions = Direction.get((Direction.direction == selected_direction) & (Direction.faculty_id == faculties.id))
-        courses = Course.select().where((Course.course == selected_course) & (Course.direction_id == directions.id)).exists()
-
-        if courses:
-            cour = Course.get((Course.course == selected_course) & (Course.direction_id == directions.id))
-
-            Users.update(course=cour.id).where(Users.id == user_id).execute()
-
-            await message.answer(text="Осталось настроить параметры поиска...")
-            user_step[user_id] = "user_sex"
-            await message.answer(text="Кто тебе интересен?", reply_markup=another_user_sex)
-        else:
-            await message.answer(text=f"<b>{selected_course}</b> курс не найден, попробуйте снова:", parse_mode="HTML")
+        selected_course = await ch_cour(message, sel_uni, sel_fac, sel_dir, sel_cour, step)
+        if (selected_course != None) and (step == "course"): user_step[message.from_user.id] = "user_sex"
+        if (selected_course != None) and (step == "fav_course"): user_step[message.from_user.id] = ""
 
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "user_sex")
@@ -422,164 +333,13 @@ async def choose_user_sex(message: types.Message):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await notifications(message)
+        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
     else:
-        sex = message.text
-        sex_arr = ["Парни", "Девушки", "Всё равно", "м", "m", "ж"]
         k = 0
-        for i in range(0, len(sex_arr)):
-            if sex.lower() == sex_arr[i].lower():
-                if i == 0 or i == 3 or i == 4:
-                    sex = "М"
-                elif i == 1 or i == 5:
-                    sex = "Ж"
-                elif i == 2:
-                    sex = "В"
+        k = await ch_us_sex(message, k)
 
-                Users.update(fav_sex=sex).where(Users.id == message.from_user.id).execute()
-                universities = University.select()
-                university = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-                for i in universities:
-                    university.add(KeyboardButton(i.university))
-                await message.answer("Выберите университет:", reply_markup=university)
-                user_step[message.from_user.id] = "fav_uni"
-                k+=1
-                break
-        if k == 0:
-            await message.answer("Пол введён неверно. Повторите попытку.")
+        if k == 1: user_step[message.from_user.id] = "fav_university"
 
-
-@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "fav_uni")
-async def fav_uni_(message: types.Message):
-    global fav_selected_university
-    fav_selected_university = message.text
-    user_id = message.from_user.id
-
-    if message.text == "/myprofile":
-        await profile(message)
-    elif message.text == "/notifications":
-        await notifications(message)
-    else:
-        universities = University.select()
-
-        for i in universities:
-            if fav_selected_university.upper() == i.university:
-                user_step[user_id] = "fav_faculty"
-
-                uni = University.get(University.university == fav_selected_university)
-                Users.update(fav_university=uni.id).where(Users.id == user_id).execute()
-
-                faculties = Faculty.select().where(Faculty.university_id == uni.id)
-                faculties_arr = [i.faculty for i in faculties]
-                fac = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-                fac.add(KeyboardButton(text="Пропустить"))
-                for i in faculties_arr:
-                    fac.add(KeyboardButton(text=i))
-                await message.answer(text="Теперь выберите факультет:", reply_markup=fac)
-                user_step[user_id] = "fav_faculty"
-                break
-        else:
-            await message.answer(text=f'<b>{fav_selected_university}</b> не найден, попробуйте еще раз:', parse_mode="HTML")
-
-
-@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "fav_faculty")
-async def fav_faculty_(message: types.Message):
-    global fav_selected_university, fav_selected_faculty
-
-    if message.text == "/myprofile":
-        await profile(message)
-    elif message.text == "/notifications":
-        await notifications(message)
-    else:
-        user_id = message.from_user.id
-        fav_selected_faculty = message.text
-        fav_selected_faculty.lower()
-
-        universities = University.get(University.university == fav_selected_university)
-        faculties = Faculty.select().where((Faculty.university_id == universities.id) 
-        & (Faculty.faculty == fav_selected_faculty)).exists()
-
-        if faculties:
-            user_step[user_id] = "fav_direction"
-
-            fac = Faculty.get((Faculty.university_id == universities.id) & (Faculty.faculty == fav_selected_faculty))
-            Users.update(fav_faculty=fac.id).where(Users.id == user_id).execute()
-
-            directions = Direction.select().where(Direction.faculty_id == fac.id) 
-            directions_arr = [i.direction for i in directions]
-            dir = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-            dir.add(KeyboardButton(text="Пропустить"))
-            for i in directions_arr:
-                dir.add(types.KeyboardButton(text=i)) 
-            await message.answer(text="Теперь выберите направление:", reply_markup=dir)
-            user_step[user_id] = "fav_direction"
-        else:
-            await message.answer(text=f'<b>{fav_selected_faculty}</b> не найден, попробуйте еще раз:', parse_mode="HTML")
-
-
-@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "fav_direction")
-async def choose_direction(message: types.Message):
-    global fav_selected_university, fav_selected_faculty, fav_selected_direction
-
-    if message.text == "/myprofile":
-        await profile(message)
-    elif message.text == "/notifications":
-        await notifications(message)
-    else:
-        user_id = message.from_user.id
-        fav_selected_direction = message.text
-        fav_selected_direction = fav_selected_direction.lower()
-
-        universities = University.get(University.university == fav_selected_university)
-        faculties = Faculty.get((Faculty.faculty == fav_selected_faculty) & (Faculty.university_id == universities.id))
-        directions = Direction.select().where((Direction.direction == fav_selected_direction) & (Direction.faculty_id == faculties.id)).exists()
-            
-        if directions:
-
-            user_step[user_id] = "fav_course"
-
-            dir = Direction.get((Direction.direction == fav_selected_direction) & (Direction.faculty_id == faculties.id))
-            Users.update(fav_direction=dir.id).where(Users.id == user_id).execute()
-
-            courses = Course.select().where(Course.direction_id == dir.id)
-            courses_arr = [i.course for i in courses]
-            cour = ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-            cour.add(KeyboardButton(text="Пропустить"))
-            for i in courses_arr:
-                cour.add(types.KeyboardButton(text=i))
-            user_step[user_id] = "fav_course"
-            await message.answer(text="Выбери курс:", reply_markup=cour)
-        else:
-            await message.answer(text=f'Направление <b>{fav_selected_direction}</b> не найдено, попробуйте еще раз:', parse_mode="HTML")            
-
-
-@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "fav_course")
-async def choose_course(message: types.Message):
-    global fav_selected_university, fav_selected_faculty, fav_selected_direction, fav_course
-
-    if message.text == "/myprofile":
-        await profile(message)
-    elif message.text == "/notifications":
-        await notifications(message)
-    else:
-        user_id = message.from_user.id
-        fav_selected_course = message.text
-
-        universities = University.get(University.university == fav_selected_university)
-        faculties = Faculty.get((Faculty.faculty == fav_selected_faculty) & (Faculty.university_id == universities.id))
-        directions = Direction.get((Direction.direction == fav_selected_direction) & (Direction.faculty_id == faculties.id))
-        courses = Course.select().where((Course.course == fav_selected_course) & (Course.direction_id == directions.id)).exists()
-
-        if courses:
-            await message.answer(text='Вы успешно прошли регистрацию.', reply_markup=types.ReplyKeyboardRemove())
-            user_step[user_id] = None
-
-            cour = Course.get((Course.course == fav_selected_course) & (Course.direction_id == directions.id))
-            Users.update(fav_course=cour.id).where(Users.id == user_id).execute()
-
-            await message.answer(text="Вернуться к выбору действия..", reply_markup=my_profile)
-        else:
-            await message.answer(text=f"<b>{fav_selected_course}</b> курс не найден, попробуйте снова:", parse_mode="HTML")
 
 
 last_user = None
@@ -766,13 +526,8 @@ async def complaint(message: types.Message, state: FSMContext):
         data = await state.get_data()
         data['choice'] = message.text
         user_step[user_id] = "search"
-        user = Users.get(Users.id == user_id)
-        intruder = Users.get(Users.id == last_user)
-
-        comp = Complaint.create(user=user.id, intruder=intruder.id, message=data['choice'])
-        comp.save()
-
-        await message.answer(text="<b>Жалоба успешно добавлена.</b>", parse_mode="HTML", reply_markup=my_profile)
+        
+        await comp(message, last_user)
         await state.finish()
 
 
@@ -819,7 +574,8 @@ async def notifications(message: types.Message):
                 await ProfileStatesGroup.choice.set()
             else:
                 chat_id = message.from_user.id
-                user_profile_link = f'Приятного общения с <a href="https://t.me/{user.name_tg}">@{user.name_tg}</a>!'
+                link = f"https://t.me/{user.name_tg}"
+                user_profile_link = f"Приятного общения с {link}!"
                 await bot.send_message(chat_id, text=user_profile_link, parse_mode="HTML")
 
                 Liked_Users.delete().where((Liked_Users.user == user.id) & (Liked_Users.liked_id == message.from_user.id)).execute()
