@@ -44,7 +44,3 @@ like_dislike.add(
     KeyboardButton(text=emoji.emojize(":warning:")),
     KeyboardButton(text=emoji.emojize(":love_letter:"))
 )
-
-
-count_users = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-count_users.add(KeyboardButton(text="Кол-во пользователей"))

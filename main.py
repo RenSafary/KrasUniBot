@@ -12,23 +12,16 @@ from datetime import *
 from keyboards import *
 from models import *
 from handlers.complaint import comp
-from handlers.registration import us_name, us_age, us_sex, us_inf, sk_uni, ch_uni, ch_fac, ch_dir, ch_cour, ch_us_sex
+from handlers.registration import us_name, us_age, us_sex, us_inf, sk_uni, ch_uni, ch_fac, ch_dir, ch_cour, ch_us_sex, ph
+from handlers.support import sup
+from ProfileStatesGroup import *
 
 
-TOKEN_API = "6677193949:AAEGvtUogiiZewOqdw8OxEIbI8hC4CqI3U8"
+TOKEN_API = "6748179824:AAFqobdbDqdYVzuMZLLFWY9RbAeADeAO610"
 
 bot = Bot(TOKEN_API)
 dp = Dispatcher(bot, storage=MemoryStorage())
 
-
-class ProfileStatesGroup(StatesGroup):
-    name = State()
-    sex = State()
-    age = State()
-    inf = State()
-    photo = State()
-    choice = State()
-    complaint = State()
 
 user_step = {}
 selected_university = ""
@@ -71,7 +64,7 @@ async def profile(message: types.Message):
             form = f"{user.name}, {user.age}\n{university.university} - {faculty.faculty} - {direction.direction} - {course.course} курс"
         await bot.send_photo(chat_id=message.from_user.id, photo=input_file, caption=form)        
 
-        text = "1. Заполнить анкету заново " + emoji.emojize(":writing_hand:") + "\n2. Изменить фото " + emoji.emojize(":sunglasses:") + "\n3. Изменить текст анкеты " + emoji.emojize(":pencil:") + "\n4. Смотреть анкеты " + emoji.emojize(":man_detective:")
+        text = "1. Заполнить анкету заново " + emoji.emojize(":writing_hand:") + "\n2. Изменить фото " + emoji.emojize(":sunglasses:") + "\n3. Изменить текст анкеты " + emoji.emojize(":pencil:") + "\n4. Смотреть анкеты " + emoji.emojize(":red_heart:")
         await message.answer(text=text, reply_markup=edit_form)
         user_step[user_id] = "choice"
         await ProfileStatesGroup.choice.set()
@@ -86,6 +79,7 @@ async def send_notification(user_id):
             liked_user = Liked_Users.select().where((Liked_Users.liked_id == user_id) & (Liked_Users.watched == False)).exists()
             if liked_user:
                 await bot.send_message(chat_id=user_id, text="Вами кто-то заинтересовался! <b>/notifications</b>", parse_mode='HTML')
+                await bot.send_sticker(user_id, sticker="CAACAgIAAxkBAAJmwmV2_yoeM5djzCP_Rg1ssho3ZPrHAAJtJQAC9LgoSjiBlNxAD-u8MwQ")
                 Liked_Users.update(watched=True).where(Liked_Users.liked_id == user_id).execute()
         await asyncio.sleep(5)
 
@@ -109,13 +103,19 @@ async def choice(message: types.Message, state: FSMContext):
     if message.text == "/myprofile": await profile(message)
 
     if message.text == "/notifications": await notifications(message)
+
+    if message.text == "/support": await support(message)
     else:
         global k
 
         async with state.proxy() as data:
             data['choice'] = message.text
             if data['choice'] == "1":
-                await message.answer("Введи своё имя:")
+                name = Users.get(Users.id == message.from_user.id)
+                your_name = ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+                your_name.add(KeyboardButton(text=name.name))
+
+                await message.answer("Введи своё имя:", reply_markup=your_name)
                 user_step[message.from_user.id] = "name"
                 await ProfileStatesGroup.name.set()
             if data['choice'] == "2":
@@ -150,6 +150,8 @@ async def choice(message: types.Message, state: FSMContext):
 async def user_name(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
+    elif message.text == "/support":
+        pass
     else:
         async with state.proxy() as data:
             data['name'] = message.text
@@ -162,6 +164,9 @@ async def user_name(message: types.Message, state: FSMContext):
 async def user_age(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
+    elif message.text == "/notifications":
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         async with state.proxy() as data:
             data['age'] = message.text
@@ -182,11 +187,11 @@ async def user_age(message: types.Message, state: FSMContext):
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "sex", state=ProfileStatesGroup.sex)
 async def user_sex(message: types.Message, state: FSMContext):
     global k
- # что-то с глобальной переменной, k не принимает значение в функции u_s
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         async with state.proxy() as data:
             data['sex'] = message.text
@@ -206,7 +211,8 @@ async def user_inf(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         async with state.proxy() as data:
             data['inf'] = message.text
@@ -217,6 +223,7 @@ async def user_inf(message: types.Message, state: FSMContext):
             else:
                 user_step[message.from_user.id] = "photo"
                 await ProfileStatesGroup.photo.set()
+                await bot.send_sticker(message.from_user.id, sticker="CAACAgIAAxkBAAJmwGV2_pqEwnIwZbRG48BJSVCbVATkAAJfEwACLl7IS9mrvzBghJYzMwQ")
             
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "photo", state=ProfileStatesGroup.photo, content_types=ContentType.PHOTO)
@@ -225,29 +232,26 @@ async def user_photo(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         async with state.proxy() as data:
             if message.content_type == "photo":
-                photo_binary = io.BytesIO()
-                await message.photo[-1].download(photo_binary)
-                data['photo'] = photo_binary.getvalue()
-
-                name = Users.update(photo=data['photo']).where(Users.id == int(message.from_user.id)).execute()
-
-                await message.answer(text="Ваша фотография успешно загружена")
                 user_step[message.from_user.id] = None
                 await state.finish()
 
-                if k == 2:
+                photo_binary = io.BytesIO()
+                await message.photo[-1].download(photo_binary)
+                data['photo'] = photo_binary.getvalue()
+                photo = data['photo']
+
+                j = k
+                k = await ph(message, photo, j)
+
+                if k == 1: user_step[message.from_user.id] = "university"
+                if k == 2: 
                     await state.finish()
-                    await message.answer(text="Вернуться к анкете..", reply_markup=my_profile)
-                if k == 1:
-                    await message.answer(text="Теперь нужно ввести информацию по вузу..")
-                    text = emoji.emojize(":warning:") + emoji.emojize(":warning:") + emoji.emojize(":warning:") + '\n' + "Пропуская выбор факультета, направления или курса, уменьшается шанс нахождения вашей анкеты другими пользователями." 
-                    await message.answer(text=text)
-                    await message.answer(text="Для начала выбери свой вуз:", reply_markup=university)
-                    user_step[message.from_user.id] = "university"
+                    user_step[message.from_user.id] = None
 
 
 @dp.message_handler(lambda message: message.text == "Пропустить")
@@ -263,12 +267,14 @@ async def choose_university(message: types.Message):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         sel_uni = None
         step = user_step[message.from_user.id]
 
         selected_university = await ch_uni(message, sel_uni, step)
+
         if (selected_university != None) and (step == "university"): user_step[message.from_user.id] = "faculty"
         if (fav_selected_faculty != None) and (step == "fav_university"): user_step[message.from_user.id] = "fav_faculty"
 
@@ -279,7 +285,8 @@ async def choose_faculty(message: types.Message):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         sel_uni = selected_university
         sel_fac = selected_faculty
@@ -296,7 +303,8 @@ async def choose_direction(message: types.Message):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         sel_uni = selected_university
         sel_fac = selected_faculty
@@ -315,7 +323,8 @@ async def choose_course(message: types.Message, state: FSMContext):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         sel_uni = selected_university
         sel_fac = selected_faculty
@@ -325,7 +334,9 @@ async def choose_course(message: types.Message, state: FSMContext):
 
         selected_course = await ch_cour(message, sel_uni, sel_fac, sel_dir, sel_cour, step)
         if (selected_course != None) and (step == "course"): user_step[message.from_user.id] = "user_sex"
-        if (selected_course != None) and (step == "fav_course"): user_step[message.from_user.id] = ""
+        if (selected_course != None) and (step == "fav_course"): 
+            await bot.send_sticker(message.from_user.id, sticker="CAACAgIAAxkBAAJmxGV3AAGkN0qzoCp66xA_9O8Y9igXBgACzRMAAl6zyEvD5PzG428z7zME")
+            user_step[message.from_user.id] = None
 
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "user_sex")
@@ -333,7 +344,8 @@ async def choose_user_sex(message: types.Message):
     if message.text == "/myprofile":
         await profile(message)
     elif message.text == "/notifications":
-        await message.answer("Нельзя посмотреть уведомления во время записи анкеты.")
+        await message.answer("Нельзя посмотреть уведомления во время создания анкеты.")
+    elif message.text == "/support": await message.answer("Нельзя оставить обращение во время создания анкеты.")
     else:
         k = 0
         k = await ch_us_sex(message, k)
@@ -346,13 +358,15 @@ last_user = None
 step_form = None
 previous_step = None
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "search", state=ProfileStatesGroup.choice)
-async def search_form(message: types.Message, state: FSMContext):
+async def search(message: types.Message, state: FSMContext):
     global last_user, step_form, previous_step
     if message.text == "/myprofile": await profile(message)
-    if message.text == "/notifications": await notifications(message)    
+    elif message.text == "/notifications": await notifications(message)
+    elif message.text == "/support": await support(message)    
     else:
         async with state.proxy() as data:
             data['choice'] = message.text
+
             if data['choice'] == "Глобальный поиск" or data['choice'] == "1":
                 data['choice'] = "search"
                 previous_step = "global_search"
@@ -364,162 +378,13 @@ async def search_form(message: types.Message, state: FSMContext):
             if data['choice'] == "Поиск по предпочтениям":
                 data['choice'] = "search"
                 previous_step = "narrow_search"
-            
-
-            if step_form == "love_letter":
-                step_form = None
-                data['choice'] = message.text
-                me = Users.get(Users.id == message.from_user.id)
-                user = Users.get(Users.id == last_user)
-
-                date = datetime.now().date()
-                user = Users.get(Users.id == last_user)
-                liked_user = Liked_Users.create(user=me.id, liked_id=user.id, message=data['choice'], date=date)
-                liked_user.save()
-                data['choice'] = "search"
-            
-            if data['choice'] == "Поиск по предпочтениям":
-                pass
-
-            if data['choice'] == emoji.emojize(":red_heart:"):
-                date = datetime.now().date()
-                user = Users.get(Users.id == last_user)
-                like = Liked_Users.create(user=message.from_user.id, liked_id=user.id, watched=False, mutually=False, date=date)
-                like.save()
-
-                data['choice'] = "search"
-
-            if data['choice'] == "search" or data['choice'] == emoji.emojize(":thumbs_down:"):
-                me = Users.get(id=message.from_user.id)
-                fav_university = University.get(University.id == me.fav_university)
-                fav_faculty = Faculty.get(Faculty.university_id == fav_university.id)
-                fav_direction = Direction.get(Direction.faculty_id == fav_faculty.id)
-                fav_course = Course.get(Course.direction_id == fav_direction.id)
-
-                mine_university = University.get(University.id == me.university)
-                mine_faculty = Faculty.get(Faculty.university_id == mine_university.id)
-                mine_direction = Direction.get(Direction.faculty_id == mine_faculty.id)
-                mine_course = Course.get(Course.direction_id == mine_direction.id)
-   
-                watched_user = Watched_Users.select().where(Watched_Users.user == me.id)
-                liked_user = Liked_Users.select().where(Liked_Users.user == me.id)
-
-                watched_user_ids = [i.watched_user.id for i in watched_user]
-                liked_user_ids = [i.liked_id.id for i in liked_user]
-
-                if previous_step == "global_search":
-                    if me.fav_sex == "В":
-                        user_query = Users.select().where((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                        & ~Users.id.in_(liked_user_ids) & ((Users.fav_sex == me.sex) | (Users.fav_sex == "В")) 
-                        & ((Users.sex == "М") | (Users.sex == "Ж"))).exists()
-                    else:
-                        user_query = Users.select().where((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                        & ~Users.id.in_(liked_user_ids) & (Users.sex == me.fav_sex) & (Users.fav_sex == me.sex)).exists()
-                if previous_step == "by_university":
-                    if me.fav_sex == "В":
-                        user_query = Users.select().where((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                        & ~Users.id.in_(liked_user_ids) & (Users.university == fav_university.id) 
-                        & ((Users.fav_sex == me.sex) | (Users.fav_sex == "В")) & ((Users.sex == "М") | (Users.sex == "Ж"))
-                        & ((Users.age <= me.age + 3) | (Users.age >= me.age - 3))).exists()
-                    else:
-                        user_query = Users.select().where((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                        & ~Users.id.in_(liked_user_ids) & (Users.university == fav_university.id) 
-                        & (Users.sex == me.fav_sex) & (Users.fav_sex == me.sex)
-                        & ((Users.age <= me.age + 3) | (Users.age >= me.age - 3))).exists()
-                if previous_step == "narrow_search":
-                    if me.fav_sex == "В":
-                        user_query = Users.select().where((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                        & ~Users.id.in_(liked_user_ids) & (Users.university == fav_university.id) 
-                        & (Users.fav_university == mine_university.id) 
-                        & (Users.faculty == fav_faculty.id) & (Users.fav_faculty == mine_faculty.id)
-                        & (Users.direction == fav_direction.id) & (Users.fav_direction == mine_direction.id)
-                        & (Users.course == fav_course.id) & (Users.fav_course == mine_course.id) 
-                        & (Users.sex == me.fav_sex) & (Users.fav_sex == me.sex)
-                        & ((Users.fav_sex == me.sex) | (Users.fav_sex == "В")) & ((Users.sex == "М") | (Users.sex == "Ж"))).exists()
-                    else:
-                        user_query = Users.select().where((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                        & ~Users.id.in_(liked_user_ids) & (Users.university == fav_university.id) 
-                        & (Users.fav_university == mine_university.id) 
-                        & (Users.faculty == fav_faculty.id) & (Users.fav_faculty == mine_faculty.id)
-                        & (Users.direction == fav_direction.id) & (Users.fav_direction == mine_direction.id)
-                        & (Users.course == fav_course.id) & (Users.fav_course == mine_course.id) 
-                        & (Users.sex == me.fav_sex) & (Users.fav_sex == me.sex)).exists()
-                # |-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|-__-|
-                if user_query:
-                    if previous_step == "global_search":
-                        if me.fav_sex == "В":
-                            user = Users.get((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                            & ~Users.id.in_(liked_user_ids) & ((Users.fav_sex == me.sex) | (Users.fav_sex == "В")) 
-                            & ((Users.sex == "М") | (Users.sex == "Ж")))
-                        else:
-                            user = Users.get((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                            & ~Users.id.in_(liked_user_ids) & (Users.sex == me.fav_sex) & (Users.fav_sex == me.sex))
-                    if previous_step == "by_university":
-                        if me.fav_sex == "В":
-                            user = Users.get((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                            & ~Users.id.in_(liked_user_ids) & (Users.university == fav_university.id) 
-                            & ((Users.fav_sex == me.sex) | (Users.fav_sex == "В")) & ((Users.sex == "М") | (Users.sex == "Ж"))
-                            & ((Users.age <= me.age + 3) | (Users.age >= me.age - 3)))
-                        else:
-                            user = Users.get((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                            & ~Users.id.in_(liked_user_ids) & (Users.university == fav_university.id) 
-                            & (Users.sex == me.fav_sex) & (Users.fav_sex == me.sex)
-                            & ((Users.age >= me.age - 2) | (Users.age <= me.age + 2)))
-                    if previous_step == "narrow_search":
-                        if me.fav_sex == "В":
-                            user = Users.get((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                            & ~Users.id.in_(liked_user_ids) & (Users.university == fav_university.id) 
-                            & (Users.fav_university == mine_university.id) 
-                            & (Users.faculty == fav_faculty.id) & (Users.fav_faculty == mine_faculty.id)
-                            & (Users.direction == fav_direction.id) & (Users.fav_direction == mine_direction.id)
-                            & (Users.course == fav_course.id) & (Users.fav_course == mine_course.id) 
-                            & (Users.sex == me.fav_sex) & (Users.fav_sex == me.sex)
-                            & ((Users.fav_sex == me.sex) | (Users.fav_sex == "В")) & ((Users.sex == "М") | (Users.sex == "Ж")))
-                        else:
-                            user = Users.get((Users.id != me.id) & ~Users.id.in_(watched_user_ids)
-                            & ~Users.id.in_(liked_user_ids) & (Users.university == fav_university.id) 
-                            & (Users.fav_university == mine_university.id) 
-                            & (Users.faculty == fav_faculty.id) & (Users.fav_faculty == mine_faculty.id)
-                            & (Users.direction == fav_direction.id) & (Users.fav_direction == mine_direction.id)
-                            & (Users.course == fav_course.id) & (Users.fav_course == mine_course.id) 
-                            & (Users.sex == me.fav_sex) & (Users.fav_sex == me.sex))
-
-                    photo = user.photo
-                    university = University.get(University.id == user.university)
-                    faculty = Faculty.get((Faculty.id == user.faculty) & (Faculty.university_id == university.id))
-                    direction = Direction.get((Direction.id == user.direction) & (Direction.faculty_id == faculty.id))
-                    course = Course.get((Course.id == user.course) & (Course.direction_id == direction.id))
-                    input_file = InputFile(io.BytesIO(photo), filename="user_photo.jpg")
-                    if user.information != None:
-                        form = f"{user.name}, {user.age}\n{university.university} - {faculty.faculty} - {direction.direction} - {course.course} курс\n\n{user.information}"
-                    else:
-                        form = f"{user.name}, {user.age}\n{university.university} - {faculty.faculty} - {direction.direction} - {course.course} курс"
-                    await bot.send_photo(chat_id=message.from_user.id, photo=input_file, caption=form)
-
-                    date = datetime.now().date()
-                    watched_user = Watched_Users.create(user=me.id, watched_user=user.id, date=date)
-                    watched_user.save()
-                    last_user = user.id
-                        
-                    await message.answer(text="Выбери действие:", reply_markup=like_dislike)
-                else:
-                    await message.answer(text="Анкеты закончились..", reply_markup=my_profile)
-
-            if data['choice'] == emoji.emojize(":warning:"):
-                await message.answer(text="Твоя жалоба на пользователя:")
-                user_step[message.from_user.id] = "complaint"
-                await ProfileStatesGroup.choice.set()
-
-            if data['choice'] == emoji.emojize(":love_letter:"):
-                await message.answer("Напиши сообщение, которое хочешь отправить пользователю..")
-                await ProfileStatesGroup.choice.set()
-                step_form = "love_letter"
 
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "complaint", state=ProfileStatesGroup.choice)
 async def complaint(message: types.Message, state: FSMContext):
     if message.text == "/myprofile": await profile(message)
-    if message.text == "/notifications": await notifications(message)
+    elif message.text == "/notifications": await notifications(message)
+    elif message.text == "/support": await support(message)
     else:
         global last_user
         user_id = message.from_user.id
@@ -539,6 +404,7 @@ async def notifications(message: types.Message):
     global step
     if message.text == "/myprofile":
         await profile(message)
+    elif message.text == "/support": await support(message)    
     else:
         global lu
         liked_user = Liked_Users.select().where(Liked_Users.liked_id == message.from_user.id).exists()
@@ -582,7 +448,8 @@ async def notifications(message: types.Message):
                 Liked_Users.delete().where((Liked_Users.user == message.from_user.id) & (Liked_Users.liked_id == user.id)).execute()
                 step = "next_form"
         else:
-            await message.answer(text="У тебя нет уведомлений", reply_markup=types.ReplyKeyboardRemove())
+            await message.answer(text="Пока что у тебя нет уведомлений", reply_markup=types.ReplyKeyboardRemove())
+            await bot.send_sticker(message.from_user.id, sticker="CAACAgIAAxkBAAJmvmV2_K91_LwCwP_yQcYVqOKlYj8iAALGFAACckXQS2ucYVpYIo33MwQ")
 
 
 @dp.message_handler(lambda message: user_step.get(message.from_user.id) == "notifications", state=ProfileStatesGroup.choice)
@@ -596,6 +463,7 @@ async def notification(message: types.Message, state=FSMContext):
             await profile(message)
         elif message.text == "/notifications":
             await notifications(message)
+        elif message.text == "/support": await support(message)
         else:
             if message.text == emoji.emojize(":thumbs_down:"):
                 user = Users.get(Users.id == lu)
@@ -658,6 +526,30 @@ async def notification(message: types.Message, state=FSMContext):
                         await bot.send_message(chat_id, text=user_profile_link, parse_mode="HTML")
                 else:
                     await message.answer(text="У тебя больше нет уведомлений", reply_markup=types.ReplyKeyboardRemove())
+
+
+@dp.message_handler(commands=['support'])
+async def support(message: types.Message):
+    await message.answer(text=f"Здесь ты можешь написать свои жалобу по тех.части или предложения по улучшению бота {emoji.emojize(':wrench:')}", reply_markup=types.ReplyKeyboardRemove())
+    user_step[message.from_user.id] = "support"
+    await ProfileStatesGroup.support.set()
+
+
+@dp.message_handler(lambda message: user_step.get(message.from_user.id) == "support", state=ProfileStatesGroup.support)
+async def support_(message: types.Message, state=FSMContext):
+    async with state.proxy() as data:
+        data['support'] = message.text
+        if message.text == "/myprofile": await profile(message)
+        elif message.text == "/notifications": await notifications(message)
+        elif message.text == "/support": await support(message)
+
+        else:
+            user_id = message.from_user.id
+            await sup(message, user_id)
+            user_step[message.from_user.id] = None
+            await state.finish()
+
+
 
 
 if __name__ == "__main__":

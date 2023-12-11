@@ -73,11 +73,18 @@ class Complaint(BaseModel):
     message = TextField()
 
 
-if __name__ == "__main__":
-    db.create_tables([Users])
-    db.connect()
+class Admin(BaseModel):
+    id = IntegerField(primary_key=True)
+    user = ForeignKeyField(Users, backref='admin')
 
-    universities = University.select()
-    for university in universities:
-        print(university.short_university)
+
+class Support(BaseModel):
+    id = IntegerField(primary_key=True)
+    user = ForeignKeyField(Users, backref="support")
+    text = TextField()
+
+
+if __name__ == "__main__":
+    db.connect()
+    db.create_tables([Users])
     db.close()

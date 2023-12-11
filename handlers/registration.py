@@ -52,6 +52,21 @@ async def us_inf(message: types.Message, i): # information
     return i
             
 
+async def ph(message: types.Message, photo, k):
+    name = Users.update(photo=photo).where(Users.id == int(message.from_user.id)).execute()
+
+    await message.answer(text="Ваша фотография успешно загружена")
+
+    if k == 2:
+        await message.answer(text="Вернуться к анкете..", reply_markup=my_profile)
+    if k == 1:
+        await message.answer(text="Теперь нужно ввести информацию по вузу..")
+        text = emoji.emojize(":warning:") + emoji.emojize(":warning:") + emoji.emojize(":warning:") + '\n' + "Пропуская выбор факультета, направления или курса, уменьшается шанс нахождения вашей анкеты другими пользователями." 
+        await message.answer(text=text)
+        await message.answer(text="Для начала выбери свой вуз:", reply_markup=university)
+    return k
+
+
 async def sk_uni(message: types.Message, step): # skip_university
     if step == "fav_faculty":
         Users.update(fav_faculty=None, fav_direction=None, fav_course=None).execute()
@@ -75,7 +90,7 @@ async def ch_uni(message: types.Message, selected_university, step): # universit
 
     if universities:
         uni = University.get(University.university == selected_university)
-        if selected_university.upper() == uni.university:
+        if selected_university.lower() == uni.university.lower():
 
             if step == "university": Users.update(university=uni.id).where(Users.id == user_id).execute()
             if step == "fav_university": Users.update(fav_university=uni.id).where(Users.id == user_id).execute()
@@ -166,7 +181,7 @@ async def ch_cour(message: types.Message, selected_university, selected_faculty,
         if step == "fav_course": 
             Users.update(fav_course=cour.id).where(Users.id == user_id).execute()
 
-            await message.answer(text='Вы успешно прошли регистрацию.', reply_markup=types.ReplyKeyboardRemove())
+            await message.answer(text='Анекта успешно создана!', reply_markup=types.ReplyKeyboardRemove())
             await message.answer(text="Вернуться к выбору действия..", reply_markup=my_profile)
     else:
         selected_course = None
